@@ -94,6 +94,15 @@ function splitCrease(size: number, c: Crease): [Pt, Pt][] {
 }
 
 export function buildPaper(size: number, creases: readonly Crease[]): Paper {
+  const creaseSegs = new Set<string>()
+  for (const c of creases) {
+    for (const [a, b] of splitCrease(size, c)) creaseSegs.add(key(segMid(a, b)))
+  }
+  return buildPaperFromSegs(size, creaseSegs)
+}
+
+/** 折り線を小三角形の辺の key（中点の 4 倍座標）の集まりで渡す。候補線のうち使うものだけで紙を作り直すときに使う */
+export function buildPaperFromSegs(size: number, creaseSegs: ReadonlySet<string>): Paper {
   const tris: Tri[] = []
   const triIndex = new Map<string, number>()
   const sides = new Map<string, { p: Pt; q: Pt; tris: number[] }>()
@@ -117,11 +126,6 @@ export function buildPaper(size: number, creases: readonly Crease[]): Paper {
   const segs = new Map<string, Seg>()
   for (const [k, s] of sides) {
     segs.set(k, { key: k, p: s.p, q: s.q, mid: segMid(s.p, s.q), line: lineOf(s.p, s.q), tris: [s.tris[0], s.tris[1] ?? -1], edge: -1 })
-  }
-
-  const creaseSegs = new Set<string>()
-  for (const c of creases) {
-    for (const [a, b] of splitCrease(size, c)) creaseSegs.add(key(segMid(a, b)))
   }
 
   const vertices = new Map<string, Vertex>()

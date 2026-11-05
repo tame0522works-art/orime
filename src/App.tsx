@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
-import { fold } from './engine/fold.ts'
-import { checkVertices, type VertexProblem } from './engine/local.ts'
-import type { Assignment, MV } from './engine/pattern.ts'
+import { evaluate, type EdgeState, type Problem } from './engine/states.ts'
 import { PUZZLES } from './puzzles/index.ts'
-import { paperOf, toAssignment } from './puzzles/load.ts'
+import { initialStates, modelOf } from './puzzles/load.ts'
 import type { Puzzle } from './puzzles/types.ts'
 import { loadProgress, saveSolved, type Progress } from './storage.ts'
 import { Board } from './ui/Board.tsx'
@@ -71,31 +69,33 @@ interface PlayProps {
   onNext: (() => void) | null
 }
 
-const CYCLE: { [k in MV | 'u']: MV | undefined } = { u: 'M', M: 'V', V: undefined }
+/** 決まった線は 未定→山→谷→未定、候補線は なし→山→谷→なし */
+function nextState(s: EdgeState, ghost: boolean): EdgeState {
+  if (s === undefined || s === 'N') return 'M'
+  if (s === 'M') return 'V'
+  return ghost ? 'N' : undefined
+}
 
 function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, onNext }: PlayProps) {
   // 解いた直後に記録が書き換わるので、開いた時点の値を持っておく
   const [solvedBefore] = useState(solvedAtStart)
-  const paper = useMemo(() => paperOf(puzzle), [puzzle])
-  const fixed = useMemo(() => paper.edges.map((e) => puzzle.given[e.id] !== undefined), [paper, puzzle])
-  const [history, setHistory] = useState<Assignment[]>(() => [toAssignment(paper, puzzle.given)])
+  const model = useMemo(() => modelOf(puzzle), [puzzle])
+  const fixed = useMemo(() => model.full.edges.map((e) => puzzle.given[e.id] !== undefined), [model, puzzle])
+  const hasGhosts = model.ghost.some(Boolean)
+  const [history, setHistory] = useState<EdgeState[][]>(() => [initialStates(model, puzzle)])
   const [view, setView] = useState<'pattern' | 'folded'>('pattern')
   const [dismissed, setDismissed] = useState(false)
-  const assignment = history[history.length - 1]
-  const checks = useMemo(() => checkVertices(paper, assignment), [paper, assignment])
-  const open = assignment.filter((x) => x === undefined).length + (paper.edges.length - assignment.length)
-  const problems = checks.filter((c) => c.problem)
-  const result = useMemo(() => (open === 0 && problems.length === 0 ? fold(paper, assignment) : null), [paper, assignment, open, problems.length])
+  const states = history[history.length - 1]
+  const ev = useMemo(() => evaluate(model, states), [model, states])
+  const { result, marks, pending: open } = ev
   const solved = result?.ok === true
 
   const tap = (e: number) => {
     if (fixed[e] || solved) return
-    const next = [...assignment]
-    next.length = paper.edges.length
-    next[e] = CYCLE[assignment[e] ?? 'u']
+    const next = [...states]
+    next[e] = nextState(states[e], model.ghost[e])
     setHistory((h) => [...h, next])
-    const nextChecks = checkVertices(paper, next)
-    if (next.every((x) => x !== undefined) && nextChecks.every((c) => !c.problem) && fold(paper, next).ok) {
+    if (evaluate(model, next).result?.ok) {
       onSolved()
       setView('folded')
       setDismissed(false)
@@ -104,9 +104,10 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
 
   let status: string
   if (solved) status = '平らに折れました。'
-  else if (problems.length) status = describe(problems.map((c) => c.problem!))
-  else if (result && !result.ok) status = '頂点はどれも通るのに、重なった紙どうしがぶつかって折れない。'
-  else status = `未定の線（灰色）をタップして、山か谷を決める。残り ${open} 本。`
+  else if (marks.length) status = describe(marks.map((c) => c.problem))
+  else if (result && !result.ok) status = result.reason === 'geometry' ? '頂点はどれも通るのに、折り線が足りず紙が閉じない。' : '頂点はどれも通るのに、重なった紙どうしがぶつかって折れない。'
+  else if (open > 0) status = `未定の線（灰色）をタップして、山か谷を決める。残り ${open} 本。`
+  else status = '薄い点線をタップして折り線を足す。'
 
   return (
     <main className="play">
@@ -123,10 +124,10 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
       {puzzle.note && <p className="rule">{puzzle.note}</p>}
 
       <div className="stage">
-        {result?.ok && view === 'folded' ? <Folded paper={paper} result={result} play /> : <Board paper={paper} assignment={assignment} fixed={fixed} checks={checks} onTap={tap} />}
+        {result?.ok && ev.active && view === 'folded' ? <Folded paper={ev.active} result={result} play /> : <Board model={model} states={states} fixed={fixed} marks={marks} onTap={tap} />}
       </div>
 
-      <p className={`status${problems.length || (result && !result.ok) ? ' bad' : ''}`} aria-live="polite">
+      <p className={`status${marks.length || (result && !result.ok) ? ' bad' : ''}`} aria-live="polite">
         {status}
       </p>
 
@@ -149,6 +150,14 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
           </svg>
           未定
         </span>
+        {hasGhosts && (
+          <span>
+            <svg viewBox="0 0 30 6">
+              <line className="crease ghost" x1="1" y1="3" x2="29" y2="3" />
+            </svg>
+            足せる場所
+          </span>
+        )}
         <span className="muted">太い線は最初から決まっている</span>
       </div>
 
@@ -190,13 +199,14 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
   )
 }
 
-const PROBLEM_TEXT: { [p in VertexProblem]: string } = {
+const PROBLEM_TEXT: { [p in Problem]: string } = {
+  switch: 'まっすぐな線の途中で山と谷が入れ替わっている',
   kawasaki: '角を1つおきに足しても 180° にならない（川崎の定理）',
   maekawa: '山と谷の本数の差が 2 になっていない（前川の定理）',
   crimp: '小さい角を挟む2本が同じ向きで、紙がぶつかる',
 }
 
-function describe(problems: VertexProblem[]): string {
+function describe(problems: Problem[]): string {
   const kinds = [...new Set(problems)]
   return `赤い印の頂点: ${kinds.map((k) => PROBLEM_TEXT[k]).join('。')}`
 }

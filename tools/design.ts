@@ -7,7 +7,7 @@
  */
 import type { MV, Paper } from '../src/engine/pattern.ts'
 import { findAssignments } from '../src/engine/solve.ts'
-import { paperOf, toRecord } from '../src/puzzles/load.ts'
+import { modelOf, toRecord } from '../src/puzzles/load.ts'
 import type { LineSpec, Puzzle } from '../src/puzzles/types.ts'
 
 let seed = 20261105
@@ -44,7 +44,8 @@ export interface Designed {
 /** local: 頂点の判定だけで答えが1つに決まるまで手がかりを残す。global: 重なりまで考えて1つに決まればよい */
 export function design(size: number, lines: LineSpec[], pick?: number, by: 'local' | 'global' = 'local'): Designed | null {
   const p = { size, lines, given: {}, answer: {} }
-  const paper: Paper = paperOf(p)
+  const model = modelOf(p)
+  const paper: Paper = model.full
   const all = findAssignments(paper, [], 5000)
   if (all.length === 0) return null
   const target = all[pick ?? rand(all.length)]
@@ -57,7 +58,7 @@ export function design(size: number, lines: LineSpec[], pick?: number, by: 'loca
   }
   const needsLayers = findAssignments(paper, given, 2, false).length > 1
   return {
-    puzzle: { size, lines, given: toRecord(paper, given), answer: toRecord(paper, target) },
+    puzzle: { size, lines, given: toRecord(model, given), answer: toRecord(model, target) },
     edges: paper.edges.length,
     foldable: all.length,
     needsLayers,

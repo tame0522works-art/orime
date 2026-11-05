@@ -1,0 +1,9 @@
+node_modules
+dist
+*.local
+*.log
+.DS_Store
+.vscode/*
+.idea
+dist-e2e
+e2e-failures

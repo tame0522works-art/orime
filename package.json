@@ -9,12 +9,13 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "tsx tools/check-engine.ts && tsx tools/check-puzzles.ts",
+    "check": "tsx tools/check-engine.ts && tsx tools/check-puzzles.ts && tsx tools/check-hints.ts",
     "check:engine": "tsx tools/check-engine.ts",
     "check:puzzles": "tsx tools/check-puzzles.ts",
     "design": "tsx tools/design.ts",
     "e2e": "vite build --outDir dist-e2e --emptyOutDir && tsx tools/e2e.ts",
-    "screenshots": "tsx tools/screenshots.ts"
+    "screenshots": "tsx tools/screenshots.ts",
+    "check:hints": "tsx tools/check-hints.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

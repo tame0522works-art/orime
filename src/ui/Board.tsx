@@ -6,13 +6,15 @@ interface Props {
   /** 最初から決まっていて変えられない辺 */
   fixed: readonly boolean[]
   marks: readonly Mark[]
+  /** ヒントで光らせる辺 */
+  hinted?: number | null
   onTap: (edge: number) => void
 }
 
 const LABEL = { M: '山', V: '谷' } as const
 
 /** 展開図。座標は元の単位で、紙の y は上向きなので反転して描く */
-export function Board({ model, states, fixed, marks, onTap }: Props) {
+export function Board({ model, states, fixed, marks, hinted = null, onTap }: Props) {
   const paper = model.full
   const n = paper.size
   const X = (x2: number) => x2 / 2
@@ -36,6 +38,11 @@ export function Board({ model, states, fixed, marks, onTap }: Props) {
         const cls = ['crease', mv === 'M' ? 'm' : mv === 'V' ? 'v' : mv === 'N' ? 'ghost' : 'u', fixed[e.index] ? 'fixed' : ''].join(' ')
         return <line key={e.id} className={cls} x1={X(a[0])} y1={Y(a[1])} x2={X(b[0])} y2={Y(b[1])} />
       })}
+      {hinted !== null &&
+        (() => {
+          const [a, b] = paper.edges[hinted].ends
+          return <line className="hint-line" x1={X(a[0])} y1={Y(a[1])} x2={X(b[0])} y2={Y(b[1])} />
+        })()}
       {marks.map((c) => (
         <circle key={`${c.vertex.p[0]},${c.vertex.p[1]}`} className="mark" cx={X(c.vertex.p[0])} cy={Y(c.vertex.p[1])} r={0.2} />
       ))}

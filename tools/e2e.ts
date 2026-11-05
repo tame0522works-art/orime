@@ -193,6 +193,40 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: 'スマホの指で20問目をヒントだけで解く: 光った線を、文で言う状態になるまで押し続ける',
+    viewport: PHONE,
+    async run(ui) {
+      await ui.open()
+      await ui.press('20問目')
+      // 最初に1本わざと違う向きにして、直すヒントが出ることも確かめる
+      await ui.crease(0)
+      await ui.crease(0)
+      let sawFix = false
+      for (let k = 0; k < 60 && !(await ui.solvedShown()); k++) {
+        await ui.press('ヒント')
+        const text = await ui.text('.hint-text')
+        const m = text.match(/ヒント: 光っている線を「(山|谷|なし)」にする/)
+        assert.ok(m, `ヒントの文が読めない: ${text}`)
+        if (text.includes('いまの向きは違う')) sawFix = true
+        // 光っている線と同じ位置の、押せる線
+        const index = await ui.page.run<number>(`
+          const h = document.querySelector('.board .hint-line');
+          const same = (a, b) => ['x1', 'y1', 'x2', 'y2'].every(k => a.getAttribute(k) === b.getAttribute(k));
+          return [...document.querySelectorAll('.board .hit')].findIndex(l => same(l, h));
+        `)
+        assert.ok(index >= 0, '光っている線が押せる線の中にない')
+        // 最後の1本は、目当ての状態にした時点で折れて盤面が折った形に替わる
+        for (let c = 0; c < 3 && !(await ui.solvedShown()) && !(await ui.label(index)).endsWith(`: ${m[1]}`); c++) await ui.crease(index)
+        if (await ui.solvedShown()) break
+        assert.ok((await ui.label(index)).endsWith(`: ${m[1]}`), '3回押しても目当ての状態にならない')
+        assert.equal(await ui.page.run(`return !!document.querySelector('.board .hint-line')`), false, '目当ての状態にしてもヒントが消えない')
+      }
+      assert.ok(await ui.solvedShown(), 'ヒントだけで解けなかった')
+      assert.ok(sawFix, '違う向きの線を直すヒントが出なかった')
+      assert.equal(await ui.page.run(`return [...document.querySelectorAll('button')].some(b => b.textContent === 'ヒント')`), false, '解いたあともヒントのボタンがある')
+    },
+  },
+  {
     name: '20問目を答えまで操作して折れる、最後の問題なので一覧へ',
     async run(ui) {
       await ui.open()

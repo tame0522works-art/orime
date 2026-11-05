@@ -262,6 +262,22 @@ a {
   stroke-dasharray: 0.12 0.1;
 }
 
+.board .hint-line {
+  stroke: var(--gold);
+  stroke-width: 0.26;
+  stroke-linecap: round;
+  opacity: 0.45;
+  pointer-events: none;
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.hint-text {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .board .mark {
   fill: var(--wrong-soft);
   stroke: var(--wrong);
@@ -299,7 +315,8 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .board .mark {
+  .board .mark,
+  .board .hint-line {
     animation: none;
   }
 }

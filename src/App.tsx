@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { evaluate, type EdgeState, type Problem } from './engine/states.ts'
 import { PUZZLES } from './puzzles/index.ts'
+import { nextHint, type Hint } from './puzzles/hint.ts'
 import { initialStates, modelOf } from './puzzles/load.ts'
 import type { Puzzle } from './puzzles/types.ts'
 import { loadProgress, saveSolved, type Progress } from './storage.ts'
@@ -85,6 +86,8 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
   const [history, setHistory] = useState<EdgeState[][]>(() => [initialStates(model, puzzle)])
   const [view, setView] = useState<'pattern' | 'folded'>('pattern')
   const [dismissed, setDismissed] = useState(false)
+  // ヒント: 次の1手（光らせる線と、どの状態にするか）
+  const [hint, setHint] = useState<Hint | null>(null)
   const states = history[history.length - 1]
   const ev = useMemo(() => evaluate(model, states), [model, states])
   const { result, marks, pending: open } = ev
@@ -95,6 +98,8 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
     const next = [...states]
     next[e] = nextState(states[e], model.ghost[e])
     setHistory((h) => [...h, next])
+    // 光っている線を目当ての状態にするまでは、ヒントを出したままにする
+    if (!hint || hint.edge !== e || next[e] === hint.target) setHint(null)
     if (evaluate(model, next).result?.ok) {
       onSolved()
       setView('folded')
@@ -124,12 +129,17 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
       {puzzle.note && <p className="rule">{puzzle.note}</p>}
 
       <div className="stage">
-        {result?.ok && ev.active && view === 'folded' ? <Folded paper={ev.active} result={result} play /> : <Board model={model} states={states} fixed={fixed} marks={marks} onTap={tap} />}
+        {result?.ok && ev.active && view === 'folded' ? <Folded paper={ev.active} result={result} play /> : <Board model={model} states={states} fixed={fixed} marks={marks} hinted={hint?.edge ?? null} onTap={tap} />}
       </div>
 
       <p className={`status${marks.length || (result && !result.ok) ? ' bad' : ''}`} aria-live="polite">
         {status}
       </p>
+      {hint && (
+        <p className="hint-text" aria-live="polite">
+          ヒント: 光っている線を「{TARGET_LABEL[hint.target ?? 'N']}」にする{hint.fix ? '（いまの向きは違う）' : ''}
+        </p>
+      )}
 
       <div className="legend" aria-hidden="true">
         <span>
@@ -162,15 +172,36 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
       </div>
 
       <div className="sub">
-        <button type="button" className="ghost" onClick={() => setHistory((h) => h.slice(0, -1))} disabled={history.length < 2 || solved}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            setHistory((h) => h.slice(0, -1))
+            setHint(null)
+          }}
+          disabled={history.length < 2 || solved}
+        >
           1手戻す
         </button>
+        {!solved && (
+          <button type="button" className="ghost" onClick={() => setHint(nextHint(model, puzzle, states))}>
+            ヒント
+          </button>
+        )}
         {solved ? (
           <button type="button" className="ghost" onClick={() => setView(view === 'folded' ? 'pattern' : 'folded')}>
             {view === 'folded' ? '展開図を見る' : '折った形を見る'}
           </button>
         ) : null}
-        <button type="button" className="ghost" onClick={() => setHistory((h) => [h[0]])} disabled={history.length < 2}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            setHistory((h) => [h[0]])
+            setHint(null)
+          }}
+          disabled={history.length < 2}
+        >
           最初から
         </button>
       </div>
@@ -198,6 +229,8 @@ function Play({ index, puzzle, solvedBefore: solvedAtStart, onSolved, onBack, on
     </main>
   )
 }
+
+const TARGET_LABEL = { M: '山', V: '谷', N: 'なし' } as const
 
 const PROBLEM_TEXT: { [p in Problem]: string } = {
   switch: 'まっすぐな線の途中で山と谷が入れ替わっている',

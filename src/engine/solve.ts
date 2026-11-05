@@ -5,8 +5,10 @@ import type { Assignment, MV, Paper, Vertex } from './pattern.ts'
 /**
  * 未定の山谷を埋めて、紙全体が折れる割り当てを探す（問題の答えが1つに決まるかを確かめるため）。
  * 頂点の折り線がすべて決まった時点で頂点ごとの判定をして枝を刈り、全部決まったら fold で確かめる。
+ * global を false にすると fold を省き、頂点ごとの判定だけで通る割り当てを返す
+ * （頂点を見るだけでは答えが決まらない問題を見分けるため）。
  */
-export function findAssignments(paper: Paper, given: Assignment, limit: number): MV[][] {
+export function findAssignments(paper: Paper, given: Assignment, limit: number, global = true): MV[][] {
   const E = paper.edges.length
   const vertices = creaseVertices(paper)
   const edgeVertices: Vertex[][] = paper.edges.map(() => [])
@@ -28,7 +30,7 @@ export function findAssignments(paper: Paper, given: Assignment, limit: number):
   const search = (k: number): void => {
     if (out.length >= limit) return
     if (k === open.length) {
-      if (fold(paper, cur).ok) out.push([...cur] as MV[])
+      if (!global || fold(paper, cur).ok) out.push([...cur] as MV[])
       return
     }
     const e = open[k]

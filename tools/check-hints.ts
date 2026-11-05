@@ -21,7 +21,7 @@ let boards = 0
 PUZZLES.forEach((p, idx) => {
   const m = modelOf(p)
   const start = initialStates(m, p)
-  const free = m.full.edges.map((e, i) => i).filter((i) => p.given[m.full.edges[i].id] === undefined)
+  const free = m.full.edges.map((_, i) => i).filter((i) => p.given[m.full.edges[i].id] === undefined)
   const errors: string[] = []
   for (let trial = 0; trial <= 200; trial++) {
     const s: EdgeState[] = [...start]
